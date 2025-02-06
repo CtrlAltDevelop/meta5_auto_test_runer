@@ -1,4 +1,3 @@
-import time
 import logging
 import subprocess
 from datetime import datetime
@@ -46,20 +45,20 @@ class Meta5AutoTestRunner(MainClass):
         data_path = Path(self._config['Meta']['DataFolderPath']) / 'reports'
         data_path.mkdir(parents=True, exist_ok=True)
         for _pass, values in tqdm(self._read_optimize_result_file(_path).items(), desc='Run Strategy Tester'):
-            filename = f'Res{_pass}_{datetime.now().strftime("%s")}'
-            _config = self._update_config(self._config, filename)
+            filename = f'Res{_pass}_{int(datetime.now().timestamp())}'
+            _config = self._update_config(self._config, filename, values)
             _config_path = self.config_path / f'{filename}.ini'
             with _config_path.open(mode="w", encoding="utf-8") as f:
                 _config.write(f)
-            time.sleep(0.1)
-            subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"], check=True)
+            subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"])
             self._html_to_excel(data_path / f'{filename}.htm', self.result_path / f'{filename}.xlsx')
 
     @staticmethod
-    def _update_config(_config: ConfigParser, filename: str) -> ConfigParser:
+    def _update_config(_config: ConfigParser, filename: str, inputs: Dict[str, Any]) -> ConfigParser:
         config = CaseSensitiveConfigParser()
         config.add_section("Common")
         config.add_section("Tester")
+        config.add_section("TesterInputs")
 
         for key, value in _config["Account"].items():
             config.set("Common", key, value)
@@ -67,11 +66,77 @@ class Meta5AutoTestRunner(MainClass):
         for key, value in _config["Tester"].items():
             config.set("Tester", key, value)
 
-        for key, value in {"ReplaceReport": "1", "ShutdownTerminal": "1", "Report": f"reports/{filename}"}.items():
+        for key, value in {
+            # Optimization mode:
+            # 0 = No optimization (single test)
+            # 1 = Slow, complete optimization
+            # 2 = Fast genetic-based optimization
+            # 3 = All symbols selected in Market Watch
+            # 4 = All symbols in the tester's symbol list
+            'Optimization': '0',
+
+            # The backtest model (how ticks are simulated):
+            #  0 = Every tick
+            #  1 = 1 minute OHLC
+            #  2 = Open prices only
+            'Model': '2',
+
+            # Whether to enable/disable the use of custom dates:
+            #  0 = Use the full available data
+            #  1 = Use the FromDate/ToDate
+            'Dates': '1',
+
+            # Forward testing mode (split the test period):
+            #  0 = No forward testing
+            #  1 = Forward testing on 1/2 of the period
+            #  2 = Forward testing on 1/3 of the period
+            #  3 = Forward testing on 1/4 of the period
+            #  4 = Custom
+            'ForwardMode': '0',
+
+            # Deposit currency (USD, EUR, etc.)
+            'Currency': 'USD',
+
+            # If 1, profits are shown in pips instead of currency. 0 means disabled.
+            'ProfitInPips': '0',
+
+            # Account leverage for the test (1:100, etc.)
+            'Leverage': '100',
+
+            # Execution mode:
+            #  0 = Execution without delay
+            #  1 = Execution with random delay
+            'ExecutionMode': '0',
+
+            # Optimization criterion:
+            #  0 = Maximize balance
+            #  1 = Maximize profit factor
+            #  2 = Maximize expected payoff
+            #  3 = Minimize drawdown
+            'OptimizationCriterion': '0',
+
+            # Whether to run a visual backtest (0 = no, 1 = yes)
+            'Visual': '0',
+
+            # Replace htm file if exist (0 = no, 1 = yes)
+            # 0 = create new file
+            # 1 = replace file if exist
+            'ReplaceReport': '1',
+
+            # close MetaTrader after test done (0 = no, 1 = yes)
+            'ShutdownTerminal': '1',
+
+            # path and filename for htm report file
+            'Report': f'reports\\{filename}',
+        }.items():
             config.set("Tester", key, value)
 
-        for key, value in _config["TesterInput"].items():
-            config.set("Tester", key, value)
+        for key, value in _config["TesterInputs"].items():
+            config.set("TesterInputs", key, value)
+
+        for key, value in inputs.items():
+            config.set("TesterInputs", key, value)
+
         return config
 
     def _get_file_via_dialog(self, title: str, filetypes: Iterable[Tuple[str, str]], optional: bool = False) \
@@ -98,7 +163,8 @@ class Meta5AutoTestRunner(MainClass):
     @staticmethod
     def _read_optimize_result_file(path: Path) -> Dict[int, Any]:
         df = pd.read_csv(path)
-        df[df.select_dtypes(include=[bool]).columns] = df.select_dtypes(include=[bool]).astype(int)
+        df[df.select_dtypes(include=[bool]).columns] = \
+            df.select_dtypes(include=[bool]).apply(lambda x: x.astype(str).str.lower())
         result = df.filter(items=['Pass'] + [col for col in df.columns if col.startswith('_')])
         result.columns = result.columns.str.lstrip('_')
         result['Pass'] = result['Pass'].astype(int)
@@ -124,5 +190,4 @@ class Meta5AutoTestRunner(MainClass):
         wb.SaveAs(str(output_path), FileFormat=51)  # 51 = xlOpenXMLWorkbook (.xlsx)
         wb.Close(False)
         excel.Quit()
-
         print(f"Excel file saved: {output_path}")
