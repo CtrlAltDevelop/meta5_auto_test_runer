@@ -12,6 +12,11 @@ from tqdm import tqdm
 from source.common.main_class import MainClass
 
 
+class CaseSensitiveConfigParser(ConfigParser):
+    def optionxform(self, option):
+        return option
+
+
 class Meta5AutoTestRunner(MainClass):
     def __init__(self, base_path: Path, debug: bool = True):
         super().__init__(base_path)
@@ -23,7 +28,7 @@ class Meta5AutoTestRunner(MainClass):
         self.config_path.mkdir(parents=True, exist_ok=True)
         self.result_path.mkdir(parents=True, exist_ok=True)
 
-        self._config = ConfigParser()
+        self._config = CaseSensitiveConfigParser()
         self._config.read(base_path / "settings.ini", encoding="utf-8")
 
     def __run__(self):
@@ -45,7 +50,7 @@ class Meta5AutoTestRunner(MainClass):
 
     @staticmethod
     def _update_config(_config: ConfigParser, filename: str) -> ConfigParser:
-        config = ConfigParser()
+        config = CaseSensitiveConfigParser()
         config.add_section("Common")
         config.add_section("Tester")
 
