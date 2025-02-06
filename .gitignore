@@ -174,3 +174,6 @@ test.py
 
 # results
 results/
+
+# configs
+configs/
