@@ -8,6 +8,7 @@ from typing import Iterable, Tuple, Optional, Dict, Any
 
 import pandas as pd
 from tqdm import tqdm
+import win32com.client as win32
 
 from source.common.main_class import MainClass
 
@@ -96,3 +97,26 @@ class Meta5AutoTestRunner(MainClass):
         result.columns = result.columns.str.lstrip('_')
         result['Pass'] = result['Pass'].astype(int)
         return result.set_index('Pass').to_dict(orient='index')
+
+    @staticmethod
+    def _html_to_excel(html_path: Path, output_path: Path):
+        """
+        Opens an HTML file in Excel (using COM) and saves it as XLSX,
+        then adjusts images to move and size with underlying cells.
+        """
+        logging.info(f"Converting HTML to Excel: {html_path} -> {output_path}")
+
+        excel = win32.DispatchEx("Excel.Application")
+        excel.Visible = False
+        wb = excel.Workbooks.Open(str(html_path))
+
+        for sheet in wb.Sheets:
+            for shape in sheet.Shapes:
+                #   1 = xlMoveAndSize, 2 = xlMove, 3 = xlFreeFloating
+                shape.Placement = 1
+
+        wb.SaveAs(str(output_path), FileFormat=51)  # 51 = xlOpenXMLWorkbook (.xlsx)
+        wb.Close(False)
+        excel.Quit()
+
+        print(f"Excel file saved: {output_path}")
