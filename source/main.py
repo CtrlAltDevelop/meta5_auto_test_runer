@@ -1,6 +1,7 @@
+import time
 import logging
-from copy import copy
-from datetime import date
+import subprocess
+from datetime import datetime
 from pathlib import Path
 from configparser import ConfigParser
 from tkinter import filedialog
@@ -42,12 +43,17 @@ class Meta5AutoTestRunner(MainClass):
                 filetypes=[("Report Optimizer", "*.csv")]
             )
 
+        data_path = Path(self._config['Meta']['DataFolderPath']) / 'reports'
+        data_path.mkdir(parents=True, exist_ok=True)
         for _pass, values in tqdm(self._read_optimize_result_file(_path).items(), desc='Run Strategy Tester'):
-            filename = f'Res{_pass}_{date.today().strftime("%Y-%m-%d")}'
+            filename = f'Res{_pass}_{datetime.now().strftime("%s")}'
             _config = self._update_config(self._config, filename)
             _config_path = self.config_path / f'{filename}.ini'
             with _config_path.open(mode="w", encoding="utf-8") as f:
                 _config.write(f)
+            time.sleep(0.1)
+            subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"], check=True)
+            self._html_to_excel(data_path / f'{filename}.htm', self.result_path / f'{filename}.xlsx')
 
     @staticmethod
     def _update_config(_config: ConfigParser, filename: str) -> ConfigParser:
