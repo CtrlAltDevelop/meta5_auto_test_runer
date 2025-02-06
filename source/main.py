@@ -60,15 +60,11 @@ class Meta5AutoTestRunner(MainClass):
         for key, value in _config["Tester"].items():
             config.set("Tester", key, value)
 
-        for key, value in {
-            "ReplaceReport": "1",
-            "ShutdownTerminal": "1",
-            "Report": f"reports/{filename}"
-        }.items():
+        for key, value in {"ReplaceReport": "1", "ShutdownTerminal": "1", "Report": f"reports/{filename}"}.items():
             config.set("Tester", key, value)
 
-        config.remove_section("Meta")
-        config.remove_section("Account")
+        for key, value in _config["TesterInput"].items():
+            config.set("Tester", key, value)
         return config
 
     def _get_file_via_dialog(self, title: str, filetypes: Iterable[Tuple[str, str]], optional: bool = False) \
