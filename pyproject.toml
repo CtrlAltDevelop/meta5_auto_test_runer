@@ -7,5 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
     "pandas>=2.2.3",
     "pyinstaller>=6.11.1",
+    "pywin32>=308",
     "tqdm>=4.67.1",
 ]
