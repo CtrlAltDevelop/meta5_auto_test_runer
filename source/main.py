@@ -19,7 +19,7 @@ class CaseSensitiveConfigParser(ConfigParser):
 
 
 class Meta5AutoTestRunner(MainClass):
-    def __init__(self, base_path: Path, debug: bool = True):
+    def __init__(self, base_path: Path, debug: bool = False):
         super().__init__(base_path)
         self.debug: bool = debug
         self.config_path = base_path / "configs"
@@ -135,7 +135,7 @@ class Meta5AutoTestRunner(MainClass):
             config.set("TesterInputs", key, value)
 
         for key, value in inputs.items():
-            config.set("TesterInputs", key, value)
+            config.set("TesterInputs", key, str(value))
 
         return config
 
