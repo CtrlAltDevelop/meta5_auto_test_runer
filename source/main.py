@@ -174,7 +174,7 @@ class Meta5AutoTestRunner(MainClass):
     def _html_to_excel(html_path: Path, output_path: Path):
         """
         Opens an HTML file in Excel (using COM) and saves it as XLSX,
-        then adjusts images to move and size with underlying cells.
+        then moves all images to a separate sheet named 'Images'.
         """
         logging.info(f"Converting HTML to Excel: {html_path} -> {output_path}")
 
@@ -182,12 +182,29 @@ class Meta5AutoTestRunner(MainClass):
         excel.Visible = False
         wb = excel.Workbooks.Open(str(html_path))
 
+        # Create a new sheet for images
+        image_sheet = wb.Sheets.Add()
+        image_sheet.Name = "Images"
+
         for sheet in wb.Sheets:
+            if sheet.Name == "Images":
+                continue  # Skip the newly created image sheet
+
+            image_row = 1  # Track row position for placing images in the new sheet
             for shape in sheet.Shapes:
-                #   1 = xlMoveAndSize, 2 = xlMove, 3 = xlFreeFloating
-                shape.Placement = 1
+                # Move the shape to the 'Images' sheet
+                shape.Copy()
+                image_sheet.Paste()
+                pasted_shape = image_sheet.Shapes(image_sheet.Shapes.Count)
+
+                # Adjust position in the new sheet
+                pasted_shape.Top = image_row * 50  # Adjust spacing between images
+                pasted_shape.Left = 10  # Keep images aligned on the left
+                image_row += 5  # Move down for next image
+                shape.Delete()
 
         wb.SaveAs(str(output_path), FileFormat=51)  # 51 = xlOpenXMLWorkbook (.xlsx)
         wb.Close(False)
         excel.Quit()
         print(f"Excel file saved: {output_path}")
+
