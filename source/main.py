@@ -167,7 +167,6 @@ class Meta5AutoTestRunner(MainClass):
         df[df.select_dtypes(include=[bool]).columns] = \
             df.select_dtypes(include=[bool]).apply(lambda x: x.astype(str).str.lower())
         result = df.filter(items=['Pass'] + [col for col in df.columns if col.startswith('_')])
-        result.columns = result.columns.str.lstrip('_')
         result['Pass'] = result['Pass'].astype(int)
         return result.set_index('Pass').to_dict(orient='index')
 
