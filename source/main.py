@@ -176,7 +176,14 @@ class Meta5AutoTestRunner(MainClass):
         """
         Opens an HTML file in Excel (using COM) and saves it as XLSX,
         then moves all images to a separate sheet named 'Images'.
+        If the output file already exists, it will be replaced.
+        If the HTML file does not exist, prints an error message and exits.
         """
+        # Check if the HTML file exists
+        if not html_path.exists():
+            print("Meta Test Done with ERROR (HTM file does not exist) Please check your input file and try again.")
+            return
+
         logging.info(f"Converting HTML to Excel: {html_path} -> {output_path}")
 
         excel = win32.DispatchEx("Excel.Application")
