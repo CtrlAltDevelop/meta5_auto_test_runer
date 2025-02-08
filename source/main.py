@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -203,8 +204,11 @@ class Meta5AutoTestRunner(MainClass):
                 image_row += 5  # Move down for next image
                 shape.Delete()
 
+        # Check if the output file already exists and delete it if it does
+        if output_path.exists():
+            os.remove(output_path)
+
         wb.SaveAs(str(output_path), FileFormat=51)  # 51 = xlOpenXMLWorkbook (.xlsx)
         wb.Close(False)
         excel.Quit()
         print(f"Excel file saved: {output_path}")
-
