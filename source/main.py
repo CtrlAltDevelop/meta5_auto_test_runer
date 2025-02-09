@@ -295,7 +295,7 @@ class Meta5AutoTestRunner(MainClass):
                 continue
             shapes = [shape for shape in sheet.Shapes]
             for shape in shapes:
-                shape.Copy()
+                shape.CopyPicture(Appearance=1, Format=-4147)  # xlScreen=1, xlPicture=-4147
                 report_sheet.Paste()
                 pasted_shape = report_sheet.Shapes(report_sheet.Shapes.Count)
                 pasted_shape.Top = report_sheet.Cells(dest_row, 1).Top
