@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +35,31 @@ class Meta5AutoTestRunner(MainClass):
         self._config = CaseSensitiveConfigParser()
         self._config.read(base_path / "settings.ini", encoding="utf-8")
 
+    def _remove_cache(self):
+        folder_path = Path(self._config['Meta']['DataFolderPath']) / 'Tester' / 'cache'
+        if not folder_path.exists():
+            logging.warning(f"The path {folder_path} does not exist.")
+            return
+
+        if not folder_path.is_dir():
+            logging.warning(f"The path {folder_path} is not a directory.")
+            return
+
+        logging.info(f"Clearing folder: {folder_path}")
+
+        for item in folder_path.iterdir():
+            try:
+                if item.is_file():
+                    logging.info(f"Removing file: {item}")
+                    item.unlink()
+                elif item.is_dir():
+                    logging.info(f"Removing directory: {item}")
+                    shutil.rmtree(item)
+            except Exception as e:
+                logging.error(f"Failed to remove {item}: {e}")
+
+        logging.info("Folder cleared successfully.")
+
     def __run__(self):
         if self.debug:
             _path = self.data_path / 'Cleaned_TF15-401-ReportOptimizer-USDCHF-93008552.csv'
@@ -47,6 +73,7 @@ class Meta5AutoTestRunner(MainClass):
         data_path = Path(self._config['Meta']['DataFolderPath']) / 'reports'
         data_path.mkdir(parents=True, exist_ok=True)
         for _pass, values in tqdm(self._read_optimize_result_file(_path).items(), desc='Run Strategy Tester'):
+            self._remove_cache()
             filename = f'Res{_pass}_{int(datetime.now().timestamp())}'
             _config = self._update_config(self._config, filename, values)
             _config_path = self.config_path / f'{filename}.ini'
