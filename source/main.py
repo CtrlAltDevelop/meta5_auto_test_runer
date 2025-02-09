@@ -1,4 +1,5 @@
 import logging
+import math
 import os
 import subprocess
 from datetime import datetime
@@ -173,14 +174,27 @@ class Meta5AutoTestRunner(MainClass):
     @staticmethod
     def _html_to_excel(html_path: Path, output_path: Path):
         """
-        Opens an HTML file in Excel (using COM) and saves it as XLSX,
-        then moves all images to a separate sheet named 'Images'.
-        If the output file already exists, it will be replaced.
-        If the HTML file does not exist, prints an error message and exits.
+        Opens an HTML file in Excel (using COM) and saves it as XLSX.
+
+        The conversion performs the following steps:
+          - Renames the first sheet to "Deals and Orders".
+          - In "Deals and Orders", finds a block of rows starting from the first row
+            where any cell equals "Results" and ending at the first row (after that) where any cell equals "Orders".
+            That block is copied to a new sheet named "Report".
+          - In the new "Report" sheet:
+               * Any cell with a NaN value is cleared.
+               * Empty columns are removed.
+               * Alternating row colors are applied (odd rows gray, even rows white) only to cells with data.
+               * Remaining columns are formatted: odd columns are left–aligned, and even columns are right–aligned.
+               * Each column is auto–fitted.
+          - Any shapes (images) from all sheets (except "Report") are copied and pasted into "Report"
+            below the report data with an extra three blank rows between images.
+          - If the output file already exists, it is replaced.
+          - If the HTML file does not exist, an error message is printed and the function exits.
         """
         # Check if the HTML file exists
         if not html_path.exists():
-            print("Meta Test Done with ERROR (HTM file does not exist) Please check your input file and try again.")
+            print("Meta Test Done with ERROR (HTM file does not exist). Please check your input file and try again.")
             return
 
         logging.info(f"Converting HTML to Excel: {html_path} -> {output_path}")
@@ -189,32 +203,105 @@ class Meta5AutoTestRunner(MainClass):
         excel.Visible = False
         wb = excel.Workbooks.Open(str(html_path))
 
-        # Create a new sheet for images
-        image_sheet = wb.Sheets.Add()
-        image_sheet.Name = "Images"
+        deals_sheet = wb.Sheets(1)
+        deals_sheet.Name = "Deals and Orders"
+
+        report_sheet = wb.Sheets.Add()
+        report_sheet.Name = "Backtest"
+
+        used_range = deals_sheet.UsedRange
+        row_count = used_range.Rows.Count
+        col_count = used_range.Columns.Count
+
+        # Find the start and end rows of the report block
+        start_row = None
+        end_row = None
+        for i in range(1, row_count + 1):
+            if start_row is None:
+                for j in range(1, col_count + 1):
+                    if deals_sheet.Cells(i, j).Value == "Results":
+                        start_row = i + 1
+                        break
+            elif end_row is None:
+                for j in range(1, col_count + 1):
+                    if deals_sheet.Cells(i, j).Value == "Orders":
+                        end_row = i - 1
+                        break
+            if start_row is not None and end_row is not None:
+                break
+
+        if start_row is not None and end_row is not None:
+            source_range = deals_sheet.Range(deals_sheet.Cells(start_row, 1),
+                                             deals_sheet.Cells(end_row, col_count))
+            source_range.Copy(report_sheet.Range("A1"))
+        else:
+            logging.warning("Could not find both 'Results' and 'Orders' markers in the Deals and Orders sheet.")
+
+
+        # Clear any cells whose value is NaN.
+        report_used = report_sheet.UsedRange
+        for i in range(1, report_used.Rows.Count + 1):
+            for j in range(1, report_used.Columns.Count + 1):
+                cell = report_sheet.Cells(i, j)
+                cell_val = cell.Value
+                if isinstance(cell_val, float) and math.isnan(cell_val):
+                    cell.ClearContents()
+
+        # Remove any empty columns.
+        report_used = report_sheet.UsedRange
+        ncols = report_used.Columns.Count
+        for j in range(ncols, 0, -1):
+            if excel.WorksheetFunction.CountA(report_sheet.Columns(j)) == 0:
+                report_sheet.Columns(j).Delete()
+
+        # Recalculate the used range after column deletion.
+        report_used = report_sheet.UsedRange
+        report_row_count = report_used.Rows.Count
+        report_col_count = report_used.Columns.Count
+
+        # Apply formatting:
+        grey_color = 14474460  # roughly 0xDCDCDC (light grey)
+        white_color = 16777215  # white 0xFFFFFF
+
+        for i in range(1, report_row_count + 1):
+            row_range = report_sheet.Range(report_sheet.Cells(i, 1), report_sheet.Cells(i, report_col_count))
+            if i % 2 == 1:
+                row_range.Interior.Color = grey_color
+            else:
+                row_range.Interior.Color = white_color
+
+        for j in range(1, report_col_count + 1):
+            col_range = report_sheet.Range(report_sheet.Cells(1, j), report_sheet.Cells(report_row_count, j))
+            if excel.WorksheetFunction.CountA(col_range) > 0:
+                if j % 2 == 1:
+                    col_range.HorizontalAlignment = -4131  # xlHAlignLeft
+                else:
+                    col_range.HorizontalAlignment = -4152  # xlHAlignRight
+                col_range.EntireColumn.AutoFit()
+
+        report_used = report_sheet.UsedRange
+        last_used_row = report_used.Row + report_used.Rows.Count - 1
+        dest_row = last_used_row + 2  # leave one blank row
 
         for sheet in wb.Sheets:
-            if sheet.Name == "Images":
-                continue  # Skip the newly created image sheet
-
-            image_row = 1  # Track row position for placing images in the new sheet
-            for shape in sheet.Shapes:
-                # Move the shape to the 'Images' sheet
+            if sheet.Name == "Backtest":
+                continue
+            shapes = [shape for shape in sheet.Shapes]
+            for shape in shapes:
                 shape.Copy()
-                image_sheet.Paste()
-                pasted_shape = image_sheet.Shapes(image_sheet.Shapes.Count)
-
-                # Adjust position in the new sheet
-                pasted_shape.Top = image_row * 50  # Adjust spacing between images
-                pasted_shape.Left = 10  # Keep images aligned on the left
-                image_row += 5  # Move down for next image
+                report_sheet.Paste()
+                pasted_shape = report_sheet.Shapes(report_sheet.Shapes.Count)
+                pasted_shape.Top = report_sheet.Cells(dest_row, 1).Top
+                pasted_shape.Left = report_sheet.Cells(dest_row, 1).Left + 10
+                row_height = report_sheet.Rows(dest_row).RowHeight
+                rows_occupied = pasted_shape.Height / row_height
+                dest_row += math.ceil(rows_occupied) + 3
                 shape.Delete()
 
-        # Check if the output file already exists and delete it if it does
         if output_path.exists():
             os.remove(output_path)
 
-        wb.SaveAs(str(output_path), FileFormat=51)  # 51 = xlOpenXMLWorkbook (.xlsx)
+        wb.SaveAs(str(output_path), FileFormat=51)  # FileFormat 51 corresponds to .xlsx
         wb.Close(False)
         excel.Quit()
         print(f"Excel file saved: {output_path}")
