@@ -251,10 +251,8 @@ class Meta5AutoTestRunner(MainClass):
                 cell = deals_sheet.Cells(i, j)
                 if cell.Value and isinstance(cell.Value, str) and " " in cell.Value:
                     try:
-                        # Remove spaces and convert the string to a float.
                         cell.Value = float(cell.Value.replace(" ", ""))
                     except ValueError:
-                        # If conversion fails, leave the cell value unchanged.
                         pass
 
         # Add a new sheet for the report/backtest data.
@@ -381,4 +379,3 @@ class Meta5AutoTestRunner(MainClass):
         wb.Close(False)
         excel.Quit()
         print(f"Excel file saved: {output_path}")
-
