@@ -207,12 +207,13 @@ class Meta5AutoTestRunner(MainClass):
           - Renames the first sheet to "Deals and Orders".
           - In "Deals and Orders":
                 * Removes row 3 if it is empty.
-                * Inserts an empty column at column 12.
+                * Inserts an empty column at column 13.
+                * Removes spaces from numeric cells (columns 9–12) so that "123 456.78" becomes 123456.78.
           - Adds a new sheet "Backtest", then:
                 * Moves the "Deals and Orders" sheet to the first position.
                 * Finds a block of rows in "Deals and Orders" (between the rows containing
                   "Results" and "Orders") and copies it to "Backtest".
-                  aligns columns (odd left–aligned, even right–aligned), and auto–fits columns.
+                  Aligns columns (odd left–aligned, even right–aligned), and auto–fits columns.
           - Copies any shapes (images) from all sheets (except "Backtest") into "Backtest"
             below the report data with an extra three blank rows between images.
           - If the output file already exists, it is replaced.
@@ -240,6 +241,21 @@ class Meta5AutoTestRunner(MainClass):
 
         # Insert an empty column at column 13 (existing columns shift to the right).
         deals_sheet.Columns(13).Insert()
+
+        # ---- NEW CODE: Clean up price cells in Deals and Orders sheet ----
+        # Process columns 9, 10, 11, 12 in the Deals sheet to remove spaces in numeric values.
+        deals_used = deals_sheet.UsedRange
+        deals_row_count = deals_used.Rows.Count
+        for i in range(1, deals_row_count + 1):
+            for j in range(9, 13):  # Columns 9 to 12
+                cell = deals_sheet.Cells(i, j)
+                if cell.Value and isinstance(cell.Value, str) and " " in cell.Value:
+                    try:
+                        # Remove spaces and convert the string to a float.
+                        cell.Value = float(cell.Value.replace(" ", ""))
+                    except ValueError:
+                        # If conversion fails, leave the cell value unchanged.
+                        pass
 
         # Add a new sheet for the report/backtest data.
         report_sheet = wb.Sheets.Add()
@@ -306,6 +322,16 @@ class Meta5AutoTestRunner(MainClass):
         report_row_count = report_used.Rows.Count
         report_col_count = report_used.Columns.Count
 
+        # --- Additional Cleanup: Remove spaces from price cells in Backtest sheet ---
+        for i in range(1, report_row_count + 1):
+            for j in range(1, report_col_count + 1):
+                cell = report_sheet.Cells(i, j)
+                if cell.Value and isinstance(cell.Value, str) and " " in cell.Value:
+                    try:
+                        cell.Value = float(cell.Value.replace(" ", ""))
+                    except ValueError:
+                        pass
+
         # Apply alternating row colors.
         grey_color = 14474460  # roughly 0xDCDCDC (light grey)
         white_color = 16777215  # white 0xFFFFFF
@@ -355,3 +381,4 @@ class Meta5AutoTestRunner(MainClass):
         wb.Close(False)
         excel.Quit()
         print(f"Excel file saved: {output_path}")
+
