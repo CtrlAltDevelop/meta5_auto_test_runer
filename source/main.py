@@ -254,7 +254,14 @@ class Meta5AutoTestRunner(MainClass):
             if excel.WorksheetFunction.CountA(report_sheet.Columns(j)) == 0:
                 report_sheet.Columns(j).Delete()
 
-        # Recalculate the used range after column deletion.
+        # Remove any empty rows in the Backtest sheet
+        report_used = report_sheet.UsedRange
+        nrows = report_used.Rows.Count
+        for i in range(nrows, 0, -1):
+            if excel.WorksheetFunction.CountA(report_sheet.Rows(i)) == 0:
+                report_sheet.Rows(i).Delete()
+
+        # Recalculate the used range after row and column deletion.
         report_used = report_sheet.UsedRange
         report_row_count = report_used.Rows.Count
         report_col_count = report_used.Columns.Count
