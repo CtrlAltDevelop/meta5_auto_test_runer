@@ -205,16 +205,15 @@ class Meta5AutoTestRunner(MainClass):
 
         The conversion performs the following steps:
           - Renames the first sheet to "Deals and Orders".
-          - In "Deals and Orders", finds a block of rows starting from the first row
-            where any cell equals "Results" and ending at the first row (after that) where any cell equals "Orders".
-            That block is copied to a new sheet named "Report".
-          - In the new "Report" sheet:
-               * Any cell with a NaN value is cleared.
-               * Empty columns are removed.
-               * Alternating row colors are applied (odd rows gray, even rows white) only to cells with data.
-               * Remaining columns are formatted: odd columns are left–aligned, and even columns are right–aligned.
-               * Each column is auto–fitted.
-          - Any shapes (images) from all sheets (except "Report") are copied and pasted into "Report"
+          - In "Deals and Orders":
+                * Removes row 3 if it is empty.
+                * Inserts an empty column at column 12.
+          - Adds a new sheet "Backtest", then:
+                * Moves the "Deals and Orders" sheet to the first position.
+                * Finds a block of rows in "Deals and Orders" (between the rows containing
+                  "Results" and "Orders") and copies it to "Backtest".
+                  aligns columns (odd left–aligned, even right–aligned), and auto–fits columns.
+          - Copies any shapes (images) from all sheets (except "Backtest") into "Backtest"
             below the report data with an extra three blank rows between images.
           - If the output file already exists, it is replaced.
           - If the HTML file does not exist, an error message is printed and the function exits.
@@ -230,17 +229,30 @@ class Meta5AutoTestRunner(MainClass):
         excel.Visible = False
         wb = excel.Workbooks.Open(str(html_path))
 
+        # Rename the first sheet to "Deals and Orders"
         deals_sheet = wb.Sheets(1)
         deals_sheet.Name = "Deals and Orders"
 
+        # --- Modification: Adjust Deals and Orders Sheet ---
+        # Remove row 3 if it is empty.
+        if excel.WorksheetFunction.CountA(deals_sheet.Rows(3)) == 0:
+            deals_sheet.Rows(3).Delete()
+
+        # Insert an empty column at column 13 (existing columns shift to the right).
+        deals_sheet.Columns(13).Insert()
+
+        # Add a new sheet for the report/backtest data.
         report_sheet = wb.Sheets.Add()
         report_sheet.Name = "Backtest"
+
+        # --- Modification: Move "Deals and Orders" to be the first sheet ---
+        deals_sheet.Move(Before=wb.Sheets(1))
 
         used_range = deals_sheet.UsedRange
         row_count = used_range.Rows.Count
         col_count = used_range.Columns.Count
 
-        # Find the start and end rows of the report block
+        # Find the start and end rows of the report block based on "Results" and "Orders" markers.
         start_row = None
         end_row = None
         for i in range(1, row_count + 1):
@@ -264,6 +276,7 @@ class Meta5AutoTestRunner(MainClass):
         else:
             logging.warning("Could not find both 'Results' and 'Orders' markers in the Deals and Orders sheet.")
 
+        # --- Modification: Data Cleanup in the Backtest Sheet ---
 
         # Clear any cells whose value is NaN.
         report_used = report_sheet.UsedRange
@@ -281,7 +294,7 @@ class Meta5AutoTestRunner(MainClass):
             if excel.WorksheetFunction.CountA(report_sheet.Columns(j)) == 0:
                 report_sheet.Columns(j).Delete()
 
-        # Remove any empty rows in the Backtest sheet
+        # Remove any empty rows in the Backtest sheet.
         report_used = report_sheet.UsedRange
         nrows = report_used.Rows.Count
         for i in range(nrows, 0, -1):
@@ -293,7 +306,7 @@ class Meta5AutoTestRunner(MainClass):
         report_row_count = report_used.Rows.Count
         report_col_count = report_used.Columns.Count
 
-        # Apply formatting:
+        # Apply alternating row colors.
         grey_color = 14474460  # roughly 0xDCDCDC (light grey)
         white_color = 16777215  # white 0xFFFFFF
 
@@ -304,6 +317,7 @@ class Meta5AutoTestRunner(MainClass):
             else:
                 row_range.Interior.Color = white_color
 
+        # Format columns: odd columns left-aligned, even columns right-aligned, and auto-fit.
         for j in range(1, report_col_count + 1):
             col_range = report_sheet.Range(report_sheet.Cells(1, j), report_sheet.Cells(report_row_count, j))
             if excel.WorksheetFunction.CountA(col_range) > 0:
@@ -315,8 +329,9 @@ class Meta5AutoTestRunner(MainClass):
 
         report_used = report_sheet.UsedRange
         last_used_row = report_used.Row + report_used.Rows.Count - 1
-        dest_row = last_used_row + 2  # leave one blank row
+        dest_row = last_used_row + 2  # Leave one blank row
 
+        # Copy shapes (images) from all sheets (except "Backtest") into "Backtest".
         for sheet in wb.Sheets:
             if sheet.Name == "Backtest":
                 continue
@@ -332,6 +347,7 @@ class Meta5AutoTestRunner(MainClass):
                 dest_row += math.ceil(rows_occupied) + 3
                 shape.Delete()
 
+        # If the output file exists, remove it.
         if output_path.exists():
             os.remove(output_path)
 
