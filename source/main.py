@@ -74,7 +74,9 @@ class Meta5AutoTestRunner(MainClass):
         data_path.mkdir(parents=True, exist_ok=True)
         for _pass, values in tqdm(self._read_optimize_result_file(_path).items(), desc='Run Strategy Tester'):
             self._remove_cache()
-            filename = f'Res{_pass}_{int(datetime.now().timestamp())}'
+            section = self._config['Tester']
+            filename = f'Res{_pass}_{section['Prefix']}_{section['Symbol']}_{section['Period']}_' \
+                       f'{int(datetime.now().timestamp())}'
             _config = self._update_config(self._config, filename, values)
             _config_path = self.config_path / f'{filename}.ini'
             with _config_path.open(mode="w", encoding="utf-8") as f:
