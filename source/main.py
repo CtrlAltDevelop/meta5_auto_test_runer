@@ -84,8 +84,14 @@ class Meta5AutoTestRunner(MainClass):
             subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"])
             self._html_to_excel(data_path / f'{filename}.htm', self.result_path / f'{filename}.xlsx')
 
-    @staticmethod
-    def _update_config(_config: ConfigParser, filename: str, inputs: Dict[str, Any]) -> ConfigParser:
+    def _validate_config(self) -> bool:
+        try:
+            return bool(self._config['TesterInputs'][self._config['Tester']['ModeInputName']])
+        except KeyError as e:
+            print(f'ERROR, No option \"{self._config['Tester']['ModeInputName']}\" in section: "TesterInputs"')
+            return False
+
+    def _update_config(self, _config: ConfigParser, filename: str, inputs: Dict[str, Any], mode: str) -> ConfigParser:
         config = CaseSensitiveConfigParser()
         config.add_section("Common")
         config.add_section("Tester")
@@ -167,6 +173,8 @@ class Meta5AutoTestRunner(MainClass):
 
         for key, value in inputs.items():
             config.set("TesterInputs", key, str(value))
+
+        config.set('TesterInputs', self._config['Tester']['ModeInputName'], mode)
 
         return config
 
