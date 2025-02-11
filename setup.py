@@ -18,7 +18,7 @@ def build():
     hooks_dir = project_dir / '.hooks'
 
     # Fetch the version from setup.py or another source
-    version = '1.0.3'
+    version = '1.1.0'
 
     # Define the executable name with the version
     exe_name = f'Zarif-Meta5_Auto_Test_Runner_v{version}'
