@@ -61,28 +61,29 @@ class Meta5AutoTestRunner(MainClass):
         logging.info("Folder cleared successfully.")
 
     def __run__(self):
+        if not self._validate_config():
+            return
+
         if self.debug:
             _path = self.data_path / 'Cleaned_TF15-401-ReportOptimizer-USDCHF-93008552.csv'
         else:
             print("Select Report Optimizer file")
-            _path = self._get_file_via_dialog(
-                title=f"Report Optimizer file",
-                filetypes=[("Report Optimizer", "*.csv")]
-            )
+            _path = self._get_file_via_dialog(title=f"Report Optimizer file", filetypes=[("Report Optimizer", "*.csv")])
 
         data_path = Path(self._config['Meta']['DataFolderPath']) / 'reports'
         data_path.mkdir(parents=True, exist_ok=True)
         for _pass, values in tqdm(self._read_optimize_result_file(_path).items(), desc='Run Strategy Tester'):
-            self._remove_cache()
             section = self._config['Tester']
-            filename = f'Res{_pass}_{section['Prefix']}_{section['Symbol']}_{section['Period']}_' \
-                       f'{int(datetime.now().timestamp())}'
-            _config = self._update_config(self._config, filename, values)
-            _config_path = self.config_path / f'{filename}.ini'
-            with _config_path.open(mode="w", encoding="utf-8") as f:
-                _config.write(f)
-            subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"])
-            self._html_to_excel(data_path / f'{filename}.htm', self.result_path / f'{filename}.xlsx')
+            self._remove_cache()
+            for prefix, mode in (('Test', '0'), ('Train', '1')):
+                filename = \
+                    f'Res{_pass}_{prefix}_{section['Symbol']}_{section['Period']}_{int(datetime.now().timestamp())}'
+                _config = self._update_config(self._config, filename, values, mode)
+                _config_path = self.config_path / f'{filename}.ini'
+                with _config_path.open(mode="w", encoding="utf-8") as f:
+                    _config.write(f)
+                subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"])
+                self._html_to_excel(data_path / f'{filename}.htm', self.result_path / f'{filename}.xlsx')
 
     def _validate_config(self) -> bool:
         try:
