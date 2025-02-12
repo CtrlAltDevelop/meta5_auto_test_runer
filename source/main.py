@@ -80,8 +80,10 @@ class Meta5AutoTestRunner(MainClass):
                     f'Res{_pass}_{prefix}_{section['Symbol']}_{section['Period']}_{int(datetime.now().timestamp())}'
                 _config = self._update_config(self._config, filename, values, mode)
                 _config_path = self.config_path / f'{filename}.ini'
-                with _config_path.open(mode="w", encoding="utf-8") as f:
-                    _config.write(f)
+                with open(_config_path, mode="w", encoding="utf-8") as ini_file:
+                    _config.write(ini_file)
+                with open(self.config_path / f'{filename}.set', mode="w", encoding="utf-8") as set_file:
+                    set_file.write('\n'.join([f"{key}={value}" for key, value in _config['TesterInputs'].items()]))
                 subprocess.run([self._config['Meta']['TerminalPath'], f"/config:{_config_path}"])
                 self._html_to_excel(data_path / f'{filename}.htm', self.result_path / f'{filename}.xlsx')
 
