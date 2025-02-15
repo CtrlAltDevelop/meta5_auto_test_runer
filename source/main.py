@@ -3,6 +3,8 @@ import math
 import os
 import shutil
 import subprocess
+import time
+import pywintypes
 from datetime import datetime
 from pathlib import Path
 from configparser import ConfigParser
@@ -240,7 +242,7 @@ class Meta5AutoTestRunner(MainClass):
         logging.info(f"Converting HTML to Excel: {html_path} -> {output_path}")
 
         excel = win32.DispatchEx("Excel.Application")
-        excel.Visible = False
+        excel.Visible = False  # Set to True for debugging if needed.
         wb = excel.Workbooks.Open(str(html_path))
 
         # Rename the first sheet to "Deals and Orders"
@@ -255,8 +257,7 @@ class Meta5AutoTestRunner(MainClass):
         # Insert an empty column at column 13 (existing columns shift to the right).
         deals_sheet.Columns(13).Insert()
 
-        # ---- NEW CODE: Clean up price cells in Deals and Orders sheet ----
-        # Process columns 9, 10, 11, 12 in the Deals sheet to remove spaces in numeric values.
+        # ---- Clean up price cells in Deals and Orders sheet (columns 9–12) ----
         deals_used = deals_sheet.UsedRange
         deals_row_count = deals_used.Rows.Count
         for i in range(1, deals_row_count + 1):
@@ -272,7 +273,7 @@ class Meta5AutoTestRunner(MainClass):
         report_sheet = wb.Sheets.Add()
         report_sheet.Name = "Backtest"
 
-        # --- Modification: Move "Deals and Orders" to be the first sheet ---
+        # Move "Deals and Orders" to be the first sheet
         deals_sheet.Move(Before=wb.Sheets(1))
 
         used_range = deals_sheet.UsedRange
@@ -297,14 +298,12 @@ class Meta5AutoTestRunner(MainClass):
                 break
 
         if start_row is not None and end_row is not None:
-            source_range = deals_sheet.Range(deals_sheet.Cells(start_row, 1),
-                                             deals_sheet.Cells(end_row, col_count))
+            source_range = deals_sheet.Range(deals_sheet.Cells(start_row, 1), deals_sheet.Cells(end_row, col_count))
             source_range.Copy(report_sheet.Range("A1"))
         else:
             logging.warning("Could not find both 'Results' and 'Orders' markers in the Deals and Orders sheet.")
 
         # --- Modification: Data Cleanup in the Backtest Sheet ---
-
         # Clear any cells whose value is NaN.
         report_used = report_sheet.UsedRange
         for i in range(1, report_used.Rows.Count + 1):
@@ -321,19 +320,19 @@ class Meta5AutoTestRunner(MainClass):
             if excel.WorksheetFunction.CountA(report_sheet.Columns(j)) == 0:
                 report_sheet.Columns(j).Delete()
 
-        # Remove any empty rows in the Backtest sheet.
+        # Remove any empty rows.
         report_used = report_sheet.UsedRange
         nrows = report_used.Rows.Count
         for i in range(nrows, 0, -1):
             if excel.WorksheetFunction.CountA(report_sheet.Rows(i)) == 0:
                 report_sheet.Rows(i).Delete()
 
-        # Recalculate the used range after row and column deletion.
+        # Recompute used range after row/column deletion
         report_used = report_sheet.UsedRange
         report_row_count = report_used.Rows.Count
         report_col_count = report_used.Columns.Count
 
-        # --- Additional Cleanup: Remove spaces from price cells in Backtest sheet ---
+        # Remove spaces from price cells in Backtest sheet
         for i in range(1, report_row_count + 1):
             for j in range(1, report_col_count + 1):
                 cell = report_sheet.Cells(i, j)
@@ -343,10 +342,9 @@ class Meta5AutoTestRunner(MainClass):
                     except ValueError:
                         pass
 
-        # Apply alternating row colors.
-        grey_color = 14474460  # roughly 0xDCDCDC (light grey)
-        white_color = 16777215  # white 0xFFFFFF
-
+        # Apply alternating row colors (light grey / white)
+        grey_color = 14474460  # 0xDCDCDC
+        white_color = 16777215  # 0xFFFFFF
         for i in range(1, report_row_count + 1):
             row_range = report_sheet.Range(report_sheet.Cells(i, 1), report_sheet.Cells(i, report_col_count))
             if i % 2 == 1:
@@ -354,7 +352,7 @@ class Meta5AutoTestRunner(MainClass):
             else:
                 row_range.Interior.Color = white_color
 
-        # Format columns: odd columns left-aligned, even columns right-aligned, and auto-fit.
+        # Format columns: odd columns left-aligned, even columns right-aligned, and auto-fit
         for j in range(1, report_col_count + 1):
             col_range = report_sheet.Range(report_sheet.Cells(1, j), report_sheet.Cells(report_row_count, j))
             if excel.WorksheetFunction.CountA(col_range) > 0:
@@ -364,31 +362,66 @@ class Meta5AutoTestRunner(MainClass):
                     col_range.HorizontalAlignment = -4152  # xlHAlignRight
                 col_range.EntireColumn.AutoFit()
 
+        # Find the row below which we'll paste shapes
         report_used = report_sheet.UsedRange
         last_used_row = report_used.Row + report_used.Rows.Count - 1
-        dest_row = last_used_row + 2  # Leave one blank row
+        dest_row = last_used_row + 2  # two rows after the last used row
 
-        # Copy shapes (images) from all sheets (except "Backtest") into "Backtest".
+        # --- Copy shapes (images) from all sheets (except "Backtest") into "Backtest" ---
         for sheet in wb.Sheets:
             if sheet.Name == "Backtest":
                 continue
+
+            # Gather shapes (if none, continue)
             shapes = [shape for shape in sheet.Shapes]
+            if not shapes:
+                continue
+
+            # Activate source sheet (helps Excel focus on the right place for copying)
+            sheet.Activate()
+
             for shape in shapes:
+                # Copy shape as a picture
+                # You can switch to shape.Copy() if shape.CopyPicture is problematic
                 shape.CopyPicture(Appearance=1, Format=-4147)  # xlScreen=1, xlPicture=-4147
-                report_sheet.Paste()
-                pasted_shape = report_sheet.Shapes(report_sheet.Shapes.Count)
-                pasted_shape.Top = report_sheet.Cells(dest_row, 1).Top
-                pasted_shape.Left = report_sheet.Cells(dest_row, 1).Left + 10
-                row_height = report_sheet.Rows(dest_row).RowHeight
-                rows_occupied = pasted_shape.Height / row_height
-                dest_row += math.ceil(rows_occupied) + 3
+
+                # Optional small delay to ensure clipboard is ready
+                time.sleep(0.2)
+
+                # Activate the report sheet before pasting
+                report_sheet.Activate()
+
+                # Try up to 3 times to paste
+                pasted = False
+                for attempt in range(3):
+                    try:
+                        report_sheet.Paste()
+                        pasted = True
+                        break
+                    except pywintypes.com_error as e:
+                        if attempt < 2:
+                            time.sleep(0.5)  # wait and retry
+                        else:
+                            raise e
+
+                if pasted:
+                    # Position the pasted shape
+                    pasted_shape = report_sheet.Shapes(report_sheet.Shapes.Count)
+                    pasted_shape.Top = report_sheet.Cells(dest_row, 1).Top
+                    pasted_shape.Left = report_sheet.Cells(dest_row, 1).Left + 10
+                    row_height = report_sheet.Rows(dest_row).RowHeight
+                    rows_occupied = pasted_shape.Height / row_height
+                    # Insert extra blank rows after the shape
+                    dest_row += math.ceil(rows_occupied) + 3
+
+                # Now remove the shape from the source sheet
                 shape.Delete()
 
-        # If the output file exists, remove it.
+        # If the output file exists, remove it so SaveAs won't prompt
         if output_path.exists():
             os.remove(output_path)
 
-        wb.SaveAs(str(output_path), FileFormat=51)  # FileFormat 51 corresponds to .xlsx
+        wb.SaveAs(str(output_path), FileFormat=51) # Save as .xlsx (FileFormat=51)
         wb.Close(False)
         excel.Quit()
         print(f"Excel file saved: {output_path}")
